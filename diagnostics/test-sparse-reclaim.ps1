@@ -150,6 +150,8 @@ try {
         Write-Host "Importing disposable $mode distro: $name"
         $registeredNames += $name
         Invoke-Wsl -Arguments @('--import', $name, $distroDir, $RootfsTar, '--version', '2') | Out-Null
+        # Only terminate this disposable distro in case import started it.
+        Invoke-Wsl -Arguments @('--terminate', $name) -AllowFailure | Out-Null
 
         if ($mode -eq 'Sparse') {
             Invoke-Wsl -Arguments @('--manage', $name, '--set-sparse', 'true') | Out-Null
@@ -194,9 +196,11 @@ try {
             Invoke-Wsl -Arguments @('--terminate', $name) | Out-Null
             Invoke-Guest -Distro $name -Command (
                 'set -eu; cd /var/tmp/wsl-sparse-lab; sha256sum -c data.sha256; sha256sum -c sentinel.sha256') | Out-Null
+            $afterRestart = Read-VhdState -Path $vhdPath
 
             Invoke-Guest -Distro $name -Command (
                 'set -eu; rm -f /var/tmp/wsl-sparse-lab/data.bin /var/tmp/wsl-sparse-lab/data.sha256; sync') | Out-Null
+            $afterDelete = Read-VhdState -Path $vhdPath
 
             $trim = Invoke-Guest -Distro $name -Command 'fstrim -v /' -AllowFailure
             $afterTrim = Read-VhdState -Path $vhdPath
@@ -243,8 +247,13 @@ try {
                 LogicalVhdBytes      = $afterTrim.LogicalBytes
                 BeforeAllocatedBytes = $before.AllocatedBytes
                 PeakAllocatedBytes   = $afterWrite.AllocatedBytes
+                AfterRestartBytes    = $afterRestart.AllocatedBytes
+                AfterDeleteBytes     = $afterDelete.AllocatedBytes
                 AfterAllocatedBytes  = $afterTrim.AllocatedBytes
                 ObservedGrowthBytes  = [int64]$growth
+                RestartDeltaBytes    = [int64]([double]$afterWrite.AllocatedBytes - [double]$afterRestart.AllocatedBytes)
+                DeleteDeltaBytes     = [int64]([double]$afterRestart.AllocatedBytes - [double]$afterDelete.AllocatedBytes)
+                FstrimDeltaBytes     = [int64]([double]$afterDelete.AllocatedBytes - [double]$afterTrim.AllocatedBytes)
                 ReclaimedBytes       = [int64]$reclaimed
                 ReclaimedFraction    = $fraction
                 TrimExitCode         = $trim.ExitCode
