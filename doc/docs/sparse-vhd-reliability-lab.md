@@ -1,4 +1,4 @@
-# Sparse VHD reclamation reliability lab (2026-11-02)
+# Sparse VHD reclamation reliability lab
 
 This investigation targets **actual host disk allocation**, not the logical VHDX file length.
 The branch intentionally does not change WSL's default: sparse mode remains experimental.
@@ -37,6 +37,14 @@ This branch:
 
 This improves diagnostics and correctness of error reporting, **not** the
 underlying Windows live sparse discard pipeline.
+
+The diagnostic probe (`diagnostics/test-sparse-reclaim.ps1`) also includes:
+- Dynamic VHDX discovery: searches the distro directory for any `.vhdx`
+  file instead of assuming `ext4.vhdx`, so the probe works if WSL uses a
+  versioned or alternative name.
+- Terminate-before-measure: the distro is stopped before each host-allocation
+  snapshot so the VHDX is not held open by the WSL virtual machine, giving
+  accurate `GetCompressedFileSizeW` readings at the restart checkpoint.
 
 ## Reproduction with disposable distros
 

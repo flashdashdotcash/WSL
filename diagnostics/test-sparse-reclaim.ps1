@@ -157,9 +157,11 @@ try {
             Invoke-Wsl -Arguments @('--manage', $name, '--set-sparse', 'true') | Out-Null
         }
 
-        $vhdPath = Join-Path $distroDir 'ext4.vhdx'
-        if (-not (Test-Path -LiteralPath $vhdPath -PathType Leaf)) {
-            throw "Expected imported VHDX was not found: $vhdPath"
+        # Discover the VHDX: WSL may use ext4.vhdx or a versioned name.
+        $vhdPath = Get-ChildItem -LiteralPath $distroDir -Filter '*.vhdx' -File |
+            Select-Object -First 1 -ExpandProperty FullName
+        if (-not $vhdPath) {
+            throw "No VHDX file found under $distroDir after import."
         }
 
         $initial = Read-VhdState -Path $vhdPath
@@ -196,6 +198,8 @@ try {
             Invoke-Wsl -Arguments @('--terminate', $name) | Out-Null
             Invoke-Guest -Distro $name -Command (
                 'set -eu; cd /var/tmp/wsl-sparse-lab; sha256sum -c data.sha256; sha256sum -c sentinel.sha256') | Out-Null
+            # Terminate before reading host allocation so the VHD is not open/in-use.
+            Invoke-Wsl -Arguments @('--terminate', $name) | Out-Null
             $afterRestart = Read-VhdState -Path $vhdPath
 
             Invoke-Guest -Distro $name -Command (
@@ -211,6 +215,8 @@ try {
             while (($growth -gt 0) -and
                    ($reclaimed -lt $MinimumReclaimFraction * $growth) -and
                    ((Get-Date) -lt $deadline)) {
+                $remaining = [int]($deadline - (Get-Date)).TotalSeconds
+                Write-Verbose "[$mode/$cycle] Waiting for host to reclaim blocks... ${remaining}s left (reclaimed $([math]::Round($reclaimed/1MB,1)) MiB so far)"
                 Start-Sleep -Seconds 3
                 $afterTrim = Read-VhdState -Path $vhdPath
                 $reclaimed = [double]$afterWrite.AllocatedBytes - [double]$afterTrim.AllocatedBytes
@@ -257,7 +263,7 @@ try {
                 ReclaimedBytes       = [int64]$reclaimed
                 ReclaimedFraction    = $fraction
                 TrimExitCode         = $trim.ExitCode
-                TrimOutput           = $trim.Output
+                TrimOutput           = if ($trim.Output.Length -gt 2048) { $trim.Output.Substring(0, 2048) + '…(truncated)' } else { $trim.Output }
                 MountOptions         = $mountOptions
                 DiscardCapabilities  = $discardInfo
                 Status               = $status
