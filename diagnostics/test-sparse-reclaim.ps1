@@ -143,13 +143,13 @@ try {
     if ($IncludeDynamicControl) { $modes = @('Dynamic', 'Sparse') }
 
     foreach ($mode in $modes) {
-        $name = "wsl-sparse-lab-$runId-$($mode.ToLowerInvariant())"
+        $name = "wsl-sparse-lab-${runId}-$($mode.ToLowerInvariant())"
         $distroDir = Join-Path $WorkRoot $name
         New-Item -ItemType Directory -Path $distroDir -Force | Out-Null
 
         Write-Host "Importing disposable $mode distro: $name"
-        Invoke-Wsl -Arguments @('--import', $name, $distroDir, $RootfsTar, '--version', '2') | Out-Null
         $registeredNames += $name
+        Invoke-Wsl -Arguments @('--import', $name, $distroDir, $RootfsTar, '--version', '2') | Out-Null
 
         if ($mode -eq 'Sparse') {
             Invoke-Wsl -Arguments @('--manage', $name, '--set-sparse', 'true') | Out-Null
