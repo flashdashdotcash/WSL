@@ -3038,16 +3038,19 @@ try
             // ResizeDistribution: it runs on the detached device without mounting it, and '-E discard'
             // issues the same block-discard requests that 'fstrim' would on a mounted filesystem.
             //
-            // This is best-effort: a failure here must not prevent compaction, so the child logs the
-            // error but still reports success.
+            // This is best-effort: a failed trim must not prevent the caller from compacting
+            // the VHD. Report failure to the service, which logs and continues compaction.
+            // e2fsck exit code 1 means the offline filesystem was successfully repaired.
             //
             const auto CommandLine = std::format("/usr/sbin/e2fsck -f -y -E discard '{}'", DevicePath);
-            if (UtilExecCommandLine(CommandLine.c_str(), nullptr) < 0)
+            if (UtilExecCommandLine(CommandLine.c_str(), nullptr, {0, 1}) < 0)
             {
                 LOG_WARNING("Failed to trim {}", DevicePath.c_str());
             }
-
-            ResponseCode = 0;
+            else
+            {
+                ResponseCode = 0;
+            }
         });
 
     return (ChildPid < 0) ? -1 : 0;

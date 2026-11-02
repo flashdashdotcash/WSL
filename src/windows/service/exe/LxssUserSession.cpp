@@ -1942,11 +1942,11 @@ try
         std::lock_guard lock(m_instanceLock);
         // Trim the filesystem before compaction so the host can reclaim the freed blocks.
         //
-        // WSL2 does not mount ext4 with 'discard' and does not run fsck at boot, so blocks freed
-        // inside the guest are still marked as allocated in the VHD and a bare compaction reclaims
-        // little space. Attaching the (now stopped) distribution's VHD to the utility VM and running
-        // an offline fsck with block discard releases those blocks, then ejecting flushes the change
-        // back to the VHD before it is compacted below.
+        // WSL2 requests 'discard' on the ext4 root mount, but not every guest free extent
+        // is necessarily reclaimed by the backing VHD. Attach the stopped distro's disk
+        // to the utility VM and request a full offline fsck with block discard before
+        // ejecting it and compacting the VHD. This improves reclamation when online
+        // discard did not release all free blocks.
         //
         // This is best-effort: any failure here must not prevent compaction.
         try
